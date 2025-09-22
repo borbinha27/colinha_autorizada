@@ -1,0 +1,39 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - CRUD de Alunos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Login</h1>
+    
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">Usuário:</label>
+        <input type="text" id="username" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Senha:</label>
+        <input type="password" id="password" required>
+      </div>
+      
+      <button type="submit">Entrar</button>
+    </form>
+    
+    <div id="message"></div>
+    
+    <div class="demo-credentials">
+      <h3>Credenciais para teste:</h3>
+      <p><strong>Admin:</strong> usuario: admin, senha: admin123</p>
+      <p><strong>Usuário:</strong> usuario: user, senha: user123</p>
+    </div>
+  </div>
+  
+  <script src="login.js"></script>
+</body>
+</html>
