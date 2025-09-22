@@ -1,35 +1,33 @@
 // server.js
 const express = require('express');
 const path = require('path');
-const alunosRoutes = require('./rotas/alunos');
-const authRoutes = require('./rotas/auth');
-const logMiddleware = require('./middleware/logMiddleware');
+const authRoutes = require('./routes/auth');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(logMiddleware);
+app.use(express.static('public')); // Serve arquivos estáticos da pasta 'public'
 
-// Rotas públicas
+// Rotas
 app.use('/api/auth', authRoutes);
 
-// Rotas protegidas
-app.use('/api/alunos', alunosRoutes);
-
-// Rota principal - serve o frontend
+// Rota para a página principal (após login)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Rota de login
+// Rota para servir o register.html diretamente
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// Rota para servir o login.html diretamente
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });

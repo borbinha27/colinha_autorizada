@@ -1,0 +1,15 @@
+{
+  "alunos": [
+    {
+      "id": 1,
+      "nome": "a",
+      "cpf": "a",
+      "telefone": "a",
+      "email": "a@a.com",
+      "matricula": "a",
+      "aluno": "a",
+      "escola": "a"
+    }
+  ],
+  "nextId": 2
+}
