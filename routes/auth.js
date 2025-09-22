@@ -2,7 +2,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { generateToken } = require('../auth');
+const { generateToken, verifyToken } = require('../auth');
 
 const router = express.Router();
 
@@ -13,7 +13,13 @@ const usersFilePath = path.join(__dirname, '../data/users.json');
 function readUsers() {
   try {
     if (!fs.existsSync(usersFilePath)) {
-      // Criar arquivo com usuários padrão se não existir
+      // Criar diretório se não existir
+      const dir = path.dirname(usersFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      
+      // Criar arquivo com usuários padrão
       const defaultUsers = [
         { id: 1, username: 'admin', password: 'admin123', role: 'admin' },
         { id: 2, username: 'user', password: 'user123', role: 'user' }
@@ -41,9 +47,14 @@ function saveUsers(users) {
   }
 }
 
-// Rota de login (mantida igual)
+// Rota de login
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
+
+  // Validações básicas
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
+  }
 
   const users = readUsers();
   const user = users.find(u => u.username === username && u.password === password);
@@ -52,6 +63,7 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Credenciais inválidas' });
   }
 
+  // Gerar token JWT
   const token = generateToken({ 
     id: user.id, 
     username: user.username, 
@@ -61,7 +73,11 @@ router.post('/login', (req, res) => {
   res.json({
     message: 'Login realizado com sucesso',
     token,
-    user: { id: user.id, username: user.username, role: user.role }
+    user: { 
+      id: user.id, 
+      username: user.username, 
+      role: user.role 
+    }
   });
 });
 
@@ -96,8 +112,8 @@ router.post('/register', (req, res) => {
     const newUser = {
       id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
       username,
-      password, // Em produção, criptografe a senha!
-      role: 'user', // Todos os novos cadastros são 'user' por padrão
+      password, // Em produção, use bcrypt!
+      role: 'user',
       createdAt: new Date().toISOString()
     };
 
@@ -118,16 +134,47 @@ router.post('/register', (req, res) => {
   }
 });
 
-// Rota para verificar token (mantida igual)
+// Rota para verificar token (usando JWT)
 router.post('/verify', (req, res) => {
   const { token } = req.body;
   
-  // A verificação real é feita no middleware, esta é simplificada
-  if (token) {
-    res.json({ valid: true });
-  } else {
-    res.json({ valid: false });
+  if (!token) {
+    return res.json({ valid: false, error: 'Token não fornecido' });
   }
+
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.json({ valid: false, error: 'Token inválido ou expirado' });
+  }
+
+  res.json({ 
+    valid: true, 
+    user: {
+      id: decoded.id,
+      username: decoded.username,
+      role: decoded.role
+    }
+  });
 });
 
-module.exports = router;
+// Rota protegida de exemplo (para testar JWT)
+router.get('/profile', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token não fornecido' });
+  }
+
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(403).json({ error: 'Token inválido' });
+  }
+
+  res.json({ 
+    message: 'Acesso autorizado',
+    user: decoded
+  });
+});
+
+module.exports = router;  

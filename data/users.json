@@ -24,5 +24,12 @@
     "password": "123456",
     "role": "user",
     "createdAt": "2025-09-22T11:11:58.839Z"
+  },
+  {
+    "id": 5,
+    "username": "usuario3",
+    "password": "usuario3",
+    "role": "user",
+    "createdAt": "2025-09-22T11:17:09.575Z"
   }
 ]

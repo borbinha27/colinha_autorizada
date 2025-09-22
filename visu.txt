@@ -1,0 +1,312 @@
+Para que cada usuário veja somente os alunos que ele cadastrou, você precisa modificar a estrutura do sistema. Aqui está a implementação:
+
+1. Modifique o schema de Alunos para incluir o userId
+Primeiro, atualize seu arquivo de alunos para incluir o ID do usuário que cadastrou:
+
+data/alunos.json
+json
+[
+  {
+    "id": 1,
+    "nome": "João Silva",
+    "idade": 20,
+    "email": "joao@email.com",
+    "curso": "Engenharia",
+    "userId": 1,
+    "criadoPor": "admin",
+    "createdAt": "2024-01-01T10:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "nome": "Maria Santos",
+    "idade": 22,
+    "email": "maria@email.com",
+    "curso": "Medicina",
+    "userId": 2,
+    "criadoPor": "user",
+    "createdAt": "2024-01-01T11:00:00.000Z"
+  }
+]
+2. Atualize as rotas de alunos para filtrar por userId
+routes/alunos.js
+javascript
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { authenticateToken } = require('../auth');
+
+const router = express.Router();
+
+const alunosFilePath = path.join(__dirname, '../data/alunos.json');
+
+// Função para ler alunos do arquivo JSON
+function readAlunos() {
+  try {
+    if (!fs.existsSync(alunosFilePath)) {
+      return [];
+    }
+    const data = fs.readFileSync(alunosFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Erro ao ler arquivo de alunos:', error);
+    return [];
+  }
+}
+
+// Função para salvar alunos no arquivo JSON
+function saveAlunos(alunos) {
+  try {
+    fs.writeFileSync(alunosFilePath, JSON.stringify(alunos, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Erro ao salvar alunos:', error);
+    return false;
+  }
+}
+
+// GET /api/alunos - Listar alunos (apenas do usuário logado)
+router.get('/', authenticateToken, (req, res) => {
+  try {
+    const alunos = readAlunos();
+    
+    // Admin vê todos os alunos, usuário comum vê apenas os seus
+    const alunosFiltrados = req.user.role === 'admin' 
+      ? alunos 
+      : alunos.filter(aluno => aluno.userId === req.user.id);
+    
+    res.json(alunosFiltrados);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar alunos' });
+  }
+});
+
+// GET /api/alunos/:id - Buscar aluno por ID (com verificação de permissão)
+router.get('/:id', authenticateToken, (req, res) => {
+  try {
+    const alunos = readAlunos();
+    const aluno = alunos.find(a => a.id === parseInt(req.params.id));
+    
+    if (!aluno) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+    
+    // Verificar permissão: admin ou dono do aluno
+    if (req.user.role !== 'admin' && aluno.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    res.json(aluno);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar aluno' });
+  }
+});
+
+// POST /api/alunos - Criar novo aluno (sempre associado ao usuário logado)
+router.post('/', authenticateToken, (req, res) => {
+  try {
+    const { nome, idade, email, curso } = req.body;
+    
+    if (!nome || !idade || !email || !curso) {
+      return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+    }
+    
+    const alunos = readAlunos();
+    
+    const novoAluno = {
+      id: alunos.length > 0 ? Math.max(...alunos.map(a => a.id)) + 1 : 1,
+      nome,
+      idade: parseInt(idade),
+      email,
+      curso,
+      userId: req.user.id, // Associar ao usuário logado
+      criadoPor: req.user.username,
+      createdAt: new Date().toISOString()
+    };
+    
+    alunos.push(novoAluno);
+    
+    if (saveAlunos(alunos)) {
+      res.status(201).json(novoAluno);
+    } else {
+      res.status(500).json({ error: 'Erro ao salvar aluno' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao criar aluno' });
+  }
+});
+
+// PUT /api/alunos/:id - Atualizar aluno (com verificação de permissão)
+router.put('/:id', authenticateToken, (req, res) => {
+  try {
+    const { nome, idade, email, curso } = req.body;
+    
+    if (!nome || !idade || !email || !curso) {
+      return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+    }
+    
+    const alunos = readAlunos();
+    const alunoIndex = alunos.findIndex(a => a.id === parseInt(req.params.id));
+    
+    if (alunoIndex === -1) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+    
+    // Verificar permissão: admin ou dono do aluno
+    if (req.user.role !== 'admin' && alunos[alunoIndex].userId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    alunos[alunoIndex] = {
+      ...alunos[alunoIndex],
+      nome,
+      idade: parseInt(idade),
+      email,
+      curso,
+      updatedAt: new Date().toISOString()
+    };
+    
+    if (saveAlunos(alunos)) {
+      res.json(alunos[alunoIndex]);
+    } else {
+      res.status(500).json({ error: 'Erro ao salvar aluno' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao atualizar aluno' });
+  }
+});
+
+// DELETE /api/alunos/:id - Deletar aluno (com verificação de permissão)
+router.delete('/:id', authenticateToken, (req, res) => {
+  try {
+    const alunos = readAlunos();
+    const alunoIndex = alunos.findIndex(a => a.id === parseInt(req.params.id));
+    
+    if (alunoIndex === -1) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+    
+    // Verificar permissão: admin ou dono do aluno
+    if (req.user.role !== 'admin' && alunos[alunoIndex].userId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    const alunoRemovido = alunos.splice(alunoIndex, 1)[0];
+    
+    if (saveAlunos(alunos)) {
+      res.json({ message: 'Aluno removido com sucesso', aluno: alunoRemovido });
+    } else {
+      res.status(500).json({ error: 'Erro ao salvar alterações' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao deletar aluno' });
+  }
+});
+
+module.exports = router;
+3. Atualize o server.js para usar as novas rotas
+javascript
+// server.js
+const express = require('express');
+const path = require('path');
+const authRoutes = require('./routes/auth');
+const alunoRoutes = require('./routes/alunos'); // Adicione esta linha
+const { authenticateToken } = require('./auth');
+
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
+
+// Rotas
+app.use('/api/auth', authRoutes);
+app.use('/api/alunos', alunoRoutes); // Adicione esta linha
+
+// Rotas para páginas
+app.get('/', (req, res) => {
+  res.redirect('/login.html');
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+// Rota para dashboard (protegida)
+app.get('/dashboard', authenticateToken, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
+4. Atualize o frontend para mostrar quem cadastrou o aluno
+No seu JavaScript do frontend, você pode adicionar uma coluna para mostrar o criador:
+
+javascript
+// No seu código que lista os alunos, adicione:
+function carregarAlunos() {
+  const token = localStorage.getItem('token');
+  
+  fetch('/api/alunos', {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  .then(response => response.json())
+  .then(alunos => {
+    const tbody = document.querySelector('#alunosTable tbody');
+    tbody.innerHTML = '';
+    
+    alunos.forEach(aluno => {
+      const row = `
+        <tr>
+          <td>${aluno.nome}</td>
+          <td>${aluno.idade}</td>
+          <td>${aluno.email}</td>
+          <td>${aluno.curso}</td>
+          <td>${aluno.criadoPor}</td> <!-- Nova coluna -->
+          <td>
+            <button onclick="editarAluno(${aluno.id})">Editar</button>
+            <button onclick="deletarAluno(${aluno.id})">Deletar</button>
+          </td>
+        </tr>
+      `;
+      tbody.innerHTML += row;
+    });
+  });
+}
+5. Atualize a tabela HTML para incluir a coluna do criador
+html
+<!-- No seu index.html, atualize a tabela: -->
+<table id="alunosTable">
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>Idade</th>
+      <th>Email</th>
+      <th>Curso</th>
+      <th>Criado Por</th> <!-- Nova coluna -->
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Os dados serão preenchidos via JavaScript -->
+  </tbody>
+</table>
+Funcionalidades implementadas:
+Filtro por usuário: Cada usuário vê apenas seus alunos
+
+Admin vê tudo: Usuários com role 'admin' veem todos os alunos
+
+Verificação de permissão: Impede que usuários acessem/altereem alunos de outros
+
+Rastreamento: Cada aluno registra quem o criou
+
+Segurança: Todas as rotas protegidas por JWT
+
+Agora o sistema está completo com separação de dados por usuário! 🎯
